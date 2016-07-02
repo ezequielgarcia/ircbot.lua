@@ -31,12 +31,15 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 		\- Loading config from config.txt
 ]]
 
-require "socket" -- luasocket
+socket = require "socket" -- luasocket
+http = require("socket.http") -- this is included with luasocket
 
 -- globals
 list = {}
 lineregex = "[^\r\n]+"
 memo = {}
+verbose = false
+mynick = foo
 
 -- definitions for use later in the script
 function deliver(s, content)
@@ -74,11 +77,14 @@ function repspace(main, first, second)
 	return relapsed
 end
 
-function getpage(url)
-	local http = require("socket.http") -- this is included with luasocket
+function getpage(_url)
 	local page = {}
-	local page, status = http.request(url) -- 1 = body, 2 = status?
-	if verbose then print(page, status) end
+	local page, status = http.request {
+		url = _url,
+		method = 'HEAD'}
+	if verbose then
+		print(page, status)
+	end
 	return page
 end
 
@@ -91,7 +97,7 @@ function process(s, channel, lnick, line) --!! , nick, host
 		end
 	end
 	-- woot
-	if string.find(line, "!woot") then
+	if false and string.find(line, "!woot") then
 		local page = getpage("http://www.woot.com/")
 		for line in string.gmatch(page, "[^\r\n]+") do
 			if string.find(line, "<h2 class=\"fn\">") then
@@ -105,7 +111,7 @@ function process(s, channel, lnick, line) --!! , nick, host
 		end
 	end
 	-- add memo for users
-	if string.find(line, "!memo ") then
+	if false and string.find(line, "!memo ") then
 		local nick = string.sub(line, string.find(line, "!memo ")+6, #line)
 		if string.find(nick, " ") then
 		nick = string.sub(nick, 1, string.find(nick, " ")-1)
@@ -118,7 +124,7 @@ function process(s, channel, lnick, line) --!! , nick, host
 		end
 	end
 	-- automatically detects http
-	if string.find(line, "http://") and not line:find("!shady") then
+	if false and string.find(line, "http://") and not line:find("!shady") then
 		local request = string.sub(line, string.find(line, "http://"), #line)
 		if string.find(request, " ") then 
 			request = string.sub(request, 1, (string.find(request, " ")-1))
@@ -150,7 +156,7 @@ function process(s, channel, lnick, line) --!! , nick, host
 	end
 	
 	-- fatwallet search
-	if string.find(line, "!fws") then
+	if false and string.find(line, "!fws") then
 		local search = " "
 		local count = 0
 		if #line >= line:find("!fws")+5 then
@@ -167,13 +173,13 @@ function process(s, channel, lnick, line) --!! , nick, host
 	end
 	
 	-- adds users to the sync table
-	if string.find(line, "!sync") then
+	if false and string.find(line, "!sync") then
 		if sync(lnick) then
 			msg(s, channel, lnick .. ": added you to to the sync table")
 		else msg(s, channel, lnick .. ": you are already on the list!") end
 	end
 	-- grab weather from weather underground
-	if string.find(line, "!temp") then
+	if false and string.find(line, "!temp") then
 		local zip = string.sub(line, (string.find(line, "!temp ") + 6))
 		local query = zip
 		if string.find(zip, " ") then query = repspace(zip, ' ', '%20') end
@@ -187,8 +193,8 @@ function process(s, channel, lnick, line) --!! , nick, host
 			end
 		end
 	end
-	if string.find(line, "!host ") then
-		local host = string.sub(line, string.find(line, "!host ")+6)
+	if false and string.find(line, "host ") then
+		local host = string.sub(line, string.find(line, "host ")+5)
 		if string.find(host, " ") then
 			host = string.sub(host, 1, string.find(host, " "))
 		end
@@ -196,29 +202,20 @@ function process(s, channel, lnick, line) --!! , nick, host
 		local f = io.popen("host " .. host)
 		local ret = f:read("*l")
 		msg(s, channel, ret)
-
 	end
-	if string.find(line, "!help") then
+	if string.find(line, "help") then
 		local com = {}
-		com[#com + 1] = "Lua IRC Bot -- by dshaw"
 		com[#com + 1] = "--- Help and Usage ---"
-		com[#com + 1] = "[Automatic] -- URL titles are automatically announced to channel"
-		com[#com + 1] = "!sync -- join an ongoing \"sync\" session"
-		com[#com + 1] = "!start -- start a ready \"sync\" session"
-		com[#com + 1] = "!whatis <query> -- returns a Google definition for <query>"
-		com[#com + 1] = "!temp <zip code or city name, state>"
-		com[#com + 1] = "!fws <query> -- searches FatWallet Hot Deals for <query>"
-		com[#com + 1] = "!woot -- returns the woot.com deal of the day and price"
-		com[#com + 1] = "!memo <nick> <message> -- relays your <message> to <nick> the next time they speak."
-		com[#com + 1] = "!sunset <zip> -- fetches today's sunset time"
-		com[#com + 1] = "!last <last.fm username> -- fetches the last track played"
-		com[#com + 1] = "!shady <url> -- makes a url shady"
+		com[#com + 1] = "google <query> -- returns a Google search"
+		com[#com + 1] = "so <query> -- returns a Stack Overflow search"
+		com[#com + 1] = "uptime -- returns the server uptime"
+		com[#com + 1] = "die -- kill me (if you can)"
 		for x=1, #com do
 			msg(s, channel, com[x])
 		end
 	end
 	-- starts the countdown and clears the sync table
-	if string.find(line, "!start") then
+	if false and string.find(line, "!start") then
 		for x=1, (#list) do
 			msg(s, channel, list[x] .. ": the time has come!")
 		end
@@ -252,7 +249,7 @@ function process(s, channel, lnick, line) --!! , nick, host
 	end
 ]]--
 	-- urbandictionary
-	if line:find("!ud ") then
+	if false and line:find("!ud ") then
 		local query = line:sub((line:find('!ud ')+4), #line)
 		if query:find(' ') then
 			query = repspace(query, ' ', '+')
@@ -266,13 +263,17 @@ function process(s, channel, lnick, line) --!! , nick, host
 		end	
 	end
 	
-	if line:find("!die") and lnick == "ownpile" then
-		os.exit()
+	if line:find("die") then
+		if lnick == "ezequielg" then
+			os.exit()
+		else
+			msg(s, channel, "you wish!")
+		end
 	end
 
 	-- stackoverflow search
-	if line:find("!so ") then
-		pr = line:sub((line:find('!so')+4), #line)
+	if false and line:find("so ") then
+		pr = line:sub((line:find('so')+4), #line)
 		local page = ''
 		if pr:find(' ') then
 			page = getpage('http://www.stackoverflow.com/search?q=' .. repspace(pr, ' ', '+'))
@@ -292,7 +293,7 @@ function process(s, channel, lnick, line) --!! , nick, host
 
 
 	-- last.fm listing
-	if line:find("!last") then
+	if false and line:find("!last") then
 		pr = line:sub((line:find("!last")+6), #line)
 		local page = getpage('http://www.last.fm/user/' .. pr)
 		for l in page:gmatch(lineregex) do
@@ -311,12 +312,12 @@ function process(s, channel, lnick, line) --!! , nick, host
 		end
 	end
 	-- pomodoro
-	if line:find("!pom") then
+	if false and line:find("!pom") then
 		msg(s, channel, lnick .. " has begun a pomodoro session. Please do not disturb for 25 minutes.")
 		return
 	end
 	-- shadyurl service
-	if line:find("!shady") then
+	if false and line:find("!shady") then
 		local ln = line:sub((line:find("!shady")+7), #line)
 		local page = getpage('http://www.shadyurl.com/create.php?myUrl=' .. ln)
 		for l in page:gmatch(lineregex) do
@@ -329,10 +330,10 @@ function process(s, channel, lnick, line) --!! , nick, host
 		end
 	end
 	-- google whatis
-	if string.find(line, "!whatis") then
+	if false and string.find(line, "google") then
 		-- find the query
 		-- !! function findparam(line, functionname)   VVVVVVVVVVVVVVVVVV
-		local query = string.sub(line, (string.find(line, "!whatis") + 8))
+		local query = string.sub(line, (string.find(line, "google") + 8))
 		if query:find(' ') then query = repspace(query, ' ', '+') end
 		local page = getpage('http://www.google.com/search?q=define%3A' .. query)
 		for line in string.gmatch(page, lineregex) do
@@ -346,7 +347,7 @@ function process(s, channel, lnick, line) --!! , nick, host
 			end
 		end
 	end
-	if string.find(line, "!sunset") then
+	if false and string.find(line, "!sunset") then
 		local query = string.sub(line, (string.find(line, "!sunset") + 8))
 		local page = getpage('http://www.google.com/search?q=sunset+' .. query)
 		for line in string.gmatch(page, lineregex) do
@@ -358,62 +359,91 @@ function process(s, channel, lnick, line) --!! , nick, host
 		end
 	end
 	-- returns system uptime
-	if string.find(line, "!uptime") then
+	if string.find(line, "uptime") then
 		local f = io.popen("uptime")
 		msg(s, channel, lnick .. ":" .. f:read("*l"))
 	end
 end
 
--- config
--- !! should take cli args 
-local serv = arg[1]
-local nick = arg[2]
-local channel = "#" .. arg[3]
-local verbose = false
-local welcomemsg = false
-
--- connect
-print("[+] setting up socket to " .. serv)
-s = socket.tcp()
-s:connect(socket.dns.toip(serv), 6667) -- !! add more support later; ssl?
-
--- initial setup
-
--- !! function-ize
-print("[+] trying nick", nick)
-
-s:send("USER " .. nick .. " " .. " " .. nick .. " " ..  nick .. " " .. ":" .. nick .. "\r\n\r\n")
-s:send("NICK " .. nick .. "\r\n\r\n")
-print("[+] joining", channel)
-s:send("JOIN " .. channel .. "\r\n\r\n")
-
-
-if welcomemsg then msg(s, channel, welcomemsg) end
-local line = nil
-
--- the guts of the script -- parses out input and processes
-while true do
-	-- just grab one line ("*l")
-	receive = s:receive('*l')
-	
+function pre_process(receive, channel)
 	-- gotta grab the ping "sequence".
 	if string.find(receive, "PING :") then
-		s:send("PONG :" .. string.sub(receive, (string.find(receive, "PING :") + 6)) .. "\r\n\r\n")
-		if verbose then print("[+] sent server pong") end
-	else
-		-- is this a message?
-		if string.find(receive, "PRIVMSG") then
-			if verbose then msg(s, channel, receive) end
-			if receive:find(channel .. " :") then line = string.sub(receive, (string.find(receive, channel .. " :") + (#channel) + 2)) end
-			if receive:find(":") and receive:find("!") then lnick = string.sub(receive, (string.find(receive, ":")+1), (string.find(receive, "!")-1)) end
-			-- !! add support for multiple channels (lchannel)
+		deliver(s, "PONG :" .. string.sub(receive, (string.find(receive, "PING :") + 6)))
+		if verbose then
+			print("[+] sent server pong")
+		end
+	elseif string.find(receive, "JOIN") then
+		if receive:find(channel .. " :") then
+			line = string.sub(receive, (string.find(receive, channel .. " :") + (#channel) + 2))
+		end
+		if receive:find(":") and receive:find("!") then
+			lnick = string.sub(receive, (string.find(receive, ":")+1), (string.find(receive, "!")-1))
+		end
+
+		if channel == "#vanguardiasur" and (string.find(lnick, "lozano") or string.find(lnick, "walter")) then
+			msg(s, channel, "Hola Walter! El nivel de alegría es " .. math.random() * 100)
+		elseif lnick ~= mynick then
+			msg(s, channel, "Hola " .. lnick .. "!")
+		end
+
+	elseif string.find(receive, "PRIVMSG") then
+			if false and verbose then
+				msg(s, channel, receive)
+			end
+			if receive:find(channel .. " :") then
+				line = string.sub(receive, (string.find(receive, channel .. " :") + (#channel) + 2))
+			end
+			if receive:find(":") and receive:find("!") then
+				lnick = string.sub(receive, (string.find(receive, ":")+1), (string.find(receive, "!")-1))
+			end
 			if line then
-				--print("processing "..line)
 				process(s, channel, lnick, line)
 			end
-		end		
 	end
-	-- verbose flag sees everything
-	if verbose then print(receive) end
 end
--- fin!
+
+function main(arg)
+	local serv = arg[1]
+	local password = arg[2]
+	local nick = arg[3]
+	local channel = "#" .. arg[4]
+	local chan_pass = arg[5]
+
+	print("[+] setting up socket to " .. serv)
+	s = socket.tcp()
+	s:connect(socket.dns.toip(serv), 6667)
+
+	print("[+] authenticating ")
+	deliver(s, "PASS " .. password)
+
+	print("[+] trying nick", nick)
+	deliver(s, "NICK " .. nick)
+	deliver(s, "USER " .. nick .. " " .. " " .. nick .. " " ..  nick .. " " .. ":" .. nick)
+
+	print("[+] joining " .. channel)
+	if chan_pass then
+		deliver(s, "JOIN " .. channel .. " " .. chan_pass)
+	else
+		deliver(s, "JOIN " .. channel)
+	end
+
+	mynick = nick
+	while true do
+		local rcv, err = s:receive('*l')
+		if not rcv then
+			print("[oops] error: " .. err)
+			if err == "closed" then
+				return
+			end
+		else
+			pre_process(rcv, channel)
+		end
+		-- verbose flag sees everything
+		if verbose then print(rcv) end
+	end
+end
+
+-- I ain't gonna stop writing C if I can
+while true do
+	main(arg)
+end
