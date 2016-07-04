@@ -20,44 +20,18 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 ]]--
 
---[[
-	TODO !!
-	
-	- Socket (s) needs to be global (table?) to be accessible
-	by all functions, instead of passed as an argument as it is currently.
-	
-	- File IO for functions (memos, possible http cache?)
-	
-		\- Loading config from config.txt
-]]
-
-socket = require "socket" -- luasocket
-http = require("socket.http") -- this is included with luasocket
-
--- globals
-list = {}
+socket = require("socket")
+http = require("socket.http")
 lineregex = "[^\r\n]+"
-memo = {}
 verbose = false
 mynick = foo
 
--- definitions for use later in the script
 function deliver(s, content)
 	s:send(content .. "\r\n\r\n")
 end
 
 function msg(s, channel, content)
 	deliver(s, "PRIVMSG " .. channel .. " :" .. content)
-end
-
-function sync(lnick)
-	for x=1, #list do
-		if list[x] == lnick then
-			return false
-		end
-	end
-	list[#list + 1] = lnick
-	return true	
 end
 
 function repspace(main, first, second)
@@ -81,7 +55,8 @@ function getpage(_url)
 	local page = {}
 	local page, status = http.request {
 		url = _url,
-		method = 'HEAD'}
+		method = 'HEAD'
+	}
 	if verbose then
 		print(page, status)
 	end
@@ -89,42 +64,61 @@ function getpage(_url)
 end
 
 -- process needs to process "line" and call higher bot tasks
-function process(s, channel, lnick, line) --!! , nick, host
-	for key, val in pairs(memo) do
-		if key == lnick then
-			msg(s, channel, lnick .. ": " .. val)
-			memo[lnick] = nil -- remove the memo
+function process(s, channel, lnick, line)
+	if line:find("help") then
+		local com = {}
+		com[#com + 1] = "--- Help and Usage ---"
+		com[#com + 1] = "google <query> -- returns a Google search - FIXME"
+		com[#com + 1] = "so <query> -- returns a Stack Overflow search - FIXME"
+		com[#com + 1] = "uptime -- returns the server uptime"
+		com[#com + 1] = "die -- kill me (if you can)"
+		for x=1, #com do
+			msg(s, channel, com[x])
 		end
-	end
-	-- woot
-	if false and string.find(line, "!woot") then
-		local page = getpage("http://www.woot.com/")
-		for line in string.gmatch(page, "[^\r\n]+") do
-			if string.find(line, "<h2 class=\"fn\">") then
-				local name = string.sub(line, string.find(line, "\">")+2, string.find(line, "</")-1)
-				msg(s, channel, "the woot item of the day is " .. name)
+	elseif line:find("die") then
+		if lnick == "ezequielg" then
+			os.exit()
+		else
+			msg(s, channel, "you wish!")
+		end
+	elseif line:find("uptime") then
+		local f = io.popen("uptime")
+		msg(s, channel, lnick .. ":" .. f:read("*l"))
+	-- FIXME
+	elseif false and line:find("so ") then
+		pr = line:sub((line:find('so')+4), #line)
+		local page = ''
+		if pr:find(' ') then
+			page = getpage('http://www.stackoverflow.com/search?q=' .. repspace(pr, ' ', '+'))
+		else
+			page = getpage('http://www.stackoverflow.com/search?q=' .. pr)
+		end
+
+		for l in page:gmatch(lineregex) do
+			if l:find('h3') then
+				local so = l:sub((l:find('h3')+12), #l)
+				local st = so:sub(1, (so:find('"')-1))
+				msg(s, channel, '[StackOverflow] http://stackoverflow.com' .. st)
+				return
 			end
-			if string.find(line, "<span class=\"amount\">") then
-				local price = string.sub(line, (string.find(line, "\"amount")+9), (string.find(line, "</span")-1))
-				msg(s, channel, "this item is selling for: " .. price)
+		end
+	elseif false and line:find("google") then
+		-- find the query
+		-- !! function findparam(line, functionname)   VVVVVVVVVVVVVVVVVV
+		local query = string.sub(line, (string.find(line, "google") + 8))
+		if query:find(' ') then query = repspace(query, ' ', '+') end
+		local page = getpage('http://www.google.com/search?q=define%3A' .. query)
+		for line in string.gmatch(page, lineregex) do
+			if string.find(line, "disc") then
+				local answer = string.sub(line, (string.find(line, "disc") + 20) )
+				local ret = string.sub(answer, 1, (string.find(answer, "<")-1))
+				if ret:find("&quot;") then 
+					ret = repspace(ret, "&quot;", '"')
+				end
+				msg(s, channel, ret)
 			end
 		end
-	end
-	-- add memo for users
-	if false and string.find(line, "!memo ") then
-		local nick = string.sub(line, string.find(line, "!memo ")+6, #line)
-		if string.find(nick, " ") then
-		nick = string.sub(nick, 1, string.find(nick, " ")-1)
-		local message = string.sub(line, string.find(line, nick)+#nick+1, #line)
-		local found = false
-		for key, val in pairs(memo) do
-			if key == nick then found = true end
-		end
-		if not found then memo[nick] = "<" .. lnick .. "> " .. message end
-		end
-	end
-	-- automatically detects http
-	if false and string.find(line, "http://") and not line:find("!shady") then
+	elseif false and line:find("http://") then
 		local request = string.sub(line, string.find(line, "http://"), #line)
 		if string.find(request, " ") then 
 			request = string.sub(request, 1, (string.find(request, " ")-1))
@@ -149,230 +143,16 @@ function process(s, channel, lnick, line) --!! , nick, host
 		  end
 		end
 	end
-	-- respond to action
-	if string.find(line, "ACTION") and string.find(line, "subz3ro") then -- !! globalize nick
-		--lol
-		msg(s, channel, "ima drop kick " .. lnick .. " in about ten seconds")
-	end
-	
-	-- fatwallet search
-	if false and string.find(line, "!fws") then
-		local search = " "
-		local count = 0
-		if #line >= line:find("!fws")+5 then
-		search = line:sub(line:find("!fws ")+4, #line)
-		end
-		local page = getpage("http://feeds.feedburner.com/FatwalletHotDeals.html")
-		for line in page:gmatch("[^\r\n]+") do
-			local lline = line:lower()
-			if line:find('title><') and line:find("CDATA") and lline:find(search:lower()) and count < 5 then
-				msg(s, channel, line:sub(line:find("title><")+15, #line-14))
-				count = count + 1
-			end
-		end
-	end
-	
-	-- adds users to the sync table
-	if false and string.find(line, "!sync") then
-		if sync(lnick) then
-			msg(s, channel, lnick .. ": added you to to the sync table")
-		else msg(s, channel, lnick .. ": you are already on the list!") end
-	end
-	-- grab weather from weather underground
-	if false and string.find(line, "!temp") then
-		local zip = string.sub(line, (string.find(line, "!temp ") + 6))
-		local query = zip
-		if string.find(zip, " ") then query = repspace(zip, ' ', '%20') end
-		--msg(s, channel, "getting weather for " .. query)
-		local page = getpage("http://www.wunderground.com/cgi-bin/findweather/getForecast?query=" .. query .. "&wuSelect=WEATHER")
-		for bline in string.gmatch(page, lineregex) do
-			if string.find(bline, "tempf") then
-				msg(s, channel, lnick .. ": the current temperature is " .. string.sub(bline, string.find(bline, "value") + 7, #bline -4) .. "F")
-				msg(s, channel, lnick .. ": forecast info: http://wolframalpha.com/input/?i=forecast+" .. query)
-				return
-			end
-		end
-	end
-	if false and string.find(line, "host ") then
-		local host = string.sub(line, string.find(line, "host ")+5)
-		if string.find(host, " ") then
-			host = string.sub(host, 1, string.find(host, " "))
-		end
-		
-		local f = io.popen("host " .. host)
-		local ret = f:read("*l")
-		msg(s, channel, ret)
-	end
-	if string.find(line, "help") then
-		local com = {}
-		com[#com + 1] = "--- Help and Usage ---"
-		com[#com + 1] = "google <query> -- returns a Google search"
-		com[#com + 1] = "so <query> -- returns a Stack Overflow search"
-		com[#com + 1] = "uptime -- returns the server uptime"
-		com[#com + 1] = "die -- kill me (if you can)"
-		for x=1, #com do
-			msg(s, channel, com[x])
-		end
-	end
-	-- starts the countdown and clears the sync table
-	if false and string.find(line, "!start") then
-		for x=1, (#list) do
-			msg(s, channel, list[x] .. ": the time has come!")
-		end
-		for y=3, 1, -1 do
-			msg(s, channel, "starting in " .. y)
-			os.execute("sleep 1")
-		end
-		
-		msg(s, channel, "--- SYNC ---")
-		list = {}
-	end
---[[
-	-- find current time
-	if line:find("!time") then
-		print "processing !time"
-		local query = "carpinteria, ca"
-		if line:find('!time ') then
-			local query = line:sub((line:find('!time ')+6), #line)
-			print ("found query " .. query)
-		end		 
-		local page = getpage('http://www.google.com/search?q=time%3' .. repspace(query, ' ', '+'))
-		for l in page:gmatch(lineregex) do
-			if l:find('<td style="font-size: medium">') then
-				print ("found line " .. l)
-				local t = l:sub((l:find('<td style="font-size: medium">')+30), #line)
-				local r = t:sub(0, t:find('</td'))
-				msg(s, channel, r)
-				return
-			end
-		end
-	end
-]]--
-	-- urbandictionary
-	if false and line:find("!ud ") then
-		local query = line:sub((line:find('!ud ')+4), #line)
-		if query:find(' ') then
-			query = repspace(query, ' ', '+')
-		end
-		local page = getpage('http://www.urbandictionary.com/define.php?term=' .. query)
-		for l in page:gmatch(lineregex) do
-			if l:find("<meta content='") then
-				msg(s, channel, l:sub(16, (#l- 23)))
-				return			
-			end
-		end	
-	end
-	
-	if line:find("die") then
-		if lnick == "ezequielg" then
-			os.exit()
-		else
-			msg(s, channel, "you wish!")
-		end
-	end
-
-	-- stackoverflow search
-	if false and line:find("so ") then
-		pr = line:sub((line:find('so')+4), #line)
-		local page = ''
-		if pr:find(' ') then
-			page = getpage('http://www.stackoverflow.com/search?q=' .. repspace(pr, ' ', '+'))
-		else
-			page = getpage('http://www.stackoverflow.com/search?q=' .. pr)
-		end
-
-		for l in page:gmatch(lineregex) do
-			if l:find('h3') then
-				local so = l:sub((l:find('h3')+12), #l)
-				local st = so:sub(1, (so:find('"')-1))
-				msg(s, channel, '[StackOverflow] http://stackoverflow.com' .. st)
-				return
-			end
-		end
-	end
-
-
-	-- last.fm listing
-	if false and line:find("!last") then
-		pr = line:sub((line:find("!last")+6), #line)
-		local page = getpage('http://www.last.fm/user/' .. pr)
-		for l in page:gmatch(lineregex) do
-			if l:find('a href="/music/') then
-				local tit = l:sub((l:find('a href="/music/')+15), #l)
-				-- lol tit
-				-- it's short for title
-				-- you pervert
-				local title = tit:sub(1, (tit:find('"')-1))
-				if title:find('+') then title = repspace(title, '+', ' ') end
-				if title:find('/') then title = repspace(title, '/', '') end
-				if title:find('_') then title = repspace(title, '_', ' -- ') end
-				msg(s, channel, pr .. "'s last played track: " .. title)
-				return
-			end
-		end
-	end
-	-- pomodoro
-	if false and line:find("!pom") then
-		msg(s, channel, lnick .. " has begun a pomodoro session. Please do not disturb for 25 minutes.")
-		return
-	end
-	-- shadyurl service
-	if false and line:find("!shady") then
-		local ln = line:sub((line:find("!shady")+7), #line)
-		local page = getpage('http://www.shadyurl.com/create.php?myUrl=' .. ln)
-		for l in page:gmatch(lineregex) do
-			if l:find('is now') then
-				local ur = l:sub( (l:find('is now')+20), #l)
-				local url = ur:sub(1, (ur:find("'")-1))
-				msg(s, channel, url)
-				return
-			end
-		end
-	end
-	-- google whatis
-	if false and string.find(line, "google") then
-		-- find the query
-		-- !! function findparam(line, functionname)   VVVVVVVVVVVVVVVVVV
-		local query = string.sub(line, (string.find(line, "google") + 8))
-		if query:find(' ') then query = repspace(query, ' ', '+') end
-		local page = getpage('http://www.google.com/search?q=define%3A' .. query)
-		for line in string.gmatch(page, lineregex) do
-			if string.find(line, "disc") then
-				local answer = string.sub(line, (string.find(line, "disc") + 20) )
-				local ret = string.sub(answer, 1, (string.find(answer, "<")-1))
-				if ret:find("&quot;") then 
-					ret = repspace(ret, "&quot;", '"')
-				end
-				msg(s, channel, ret)
-			end
-		end
-	end
-	if false and string.find(line, "!sunset") then
-		local query = string.sub(line, (string.find(line, "!sunset") + 8))
-		local page = getpage('http://www.google.com/search?q=sunset+' .. query)
-		for line in string.gmatch(page, lineregex) do
-			if string.find(line, '<td class="r">') then
-				local answer= string.sub(line, (string.find(line, '<td class="r">') + 26), #line)
-				local ret = answer:sub(1, (answer:find('<')-1))
-				msg(s, channel, ret)
-			end
-		end
-	end
-	-- returns system uptime
-	if string.find(line, "uptime") then
-		local f = io.popen("uptime")
-		msg(s, channel, lnick .. ":" .. f:read("*l"))
-	end
 end
 
 function pre_process(receive, channel)
 	-- gotta grab the ping "sequence".
-	if string.find(receive, "PING :") then
+	if receive:find("PING :") then
 		deliver(s, "PONG :" .. string.sub(receive, (string.find(receive, "PING :") + 6)))
 		if verbose then
 			print("[+] sent server pong")
 		end
-	elseif string.find(receive, "JOIN") then
+	elseif receive:find("JOIN") then
 		if receive:find(channel .. " :") then
 			line = string.sub(receive, (string.find(receive, channel .. " :") + (#channel) + 2))
 		end
@@ -386,7 +166,7 @@ function pre_process(receive, channel)
 			msg(s, channel, "Hola " .. lnick .. "!")
 		end
 
-	elseif string.find(receive, "PRIVMSG") then
+	elseif receive:find("PRIVMSG") then
 			if false and verbose then
 				msg(s, channel, receive)
 			end
@@ -438,7 +218,6 @@ function main(arg)
 		else
 			pre_process(rcv, channel)
 		end
-		-- verbose flag sees everything
 		if verbose then print(rcv) end
 	end
 end
